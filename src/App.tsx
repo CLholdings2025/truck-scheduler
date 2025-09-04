@@ -185,47 +185,215 @@ export default function App() {
                 <button key={d} className={`px-2 py-1 rounded-md text-sm ${activeDay === d ? "bg-slate-800 text-white" : "hover:bg-slate-100"}`} onClick={() => setActiveDay(d)}>{d}</button>
               ))}
             </div>
-               <button
-      className="px-3 py-2 rounded-lg bg-slate-800 text-white"
-      onClick={autoSchedule}
-    >
-      Auto
-    </button>
+            <button className="px-3 py-2 rounded-lg bg-slate-800 text-white" onClick={autoSchedule}>Auto</button>
+            <button className="px-3 py-2 rounded-lg bg-white border" onClick={() => setScheduled([])}>Clear</button>
+            <button className="px-3 py-2 rounded-lg bg-white border" onClick={printSheets}>Print</button>
+            <div className="flex items-center gap-2 pl-2 border-l ml-1">
+              <label className="text-xs text-slate-600">Shared</label>
+              <input type="checkbox" className="h-4 w-4" checked={sharedOn} onChange={(e) => setSharedOn(e.target.checked)} />
+              <span className={`text-xs ${sharedOn ? (sharedInfo.connected ? "text-green-600" : "text-slate-500") : "text-slate-500"}`}>{sharedOn ? (sharedInfo.connected ? "online" : "connecting…") : "off"}</span>
+            </div>
+          </div>
+        </header>
 
-    <button
-      className="px-3 py-2 rounded-lg bg-white border"
-      onClick={() => setScheduled([])}
-    >
-      Clear
-    </button>
+        <Card title="Settings">
+          <div className="grid md:grid-cols-3 gap-3">
+            <div><label className="block text-sm">Start</label><input type="time" className="mt-1 w-full border rounded px-2 py-1" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div>
+            <div><label className="block text-sm">End</label><input type="time" className="mt-1 w-full border rounded px-2 py-1" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div>
+            <div><label className="block text-sm">Gap (min)</label><input type="number" min={0} className="mt-1 w-full border rounded px-2 py-1" value={gap} onChange={(e) => setGap(Number(e.target.value))} /></div>
+          </div>
+        </Card>
 
-    <button
-      className="px-3 py-2 rounded-lg bg-white border"
-      onClick={printSheets}
-    >
-      Print
-    </button>
+        <Card title="Trucks" actions={<div className="flex items-center gap-2"><input type="number" min={0} className="border rounded px-2 py-1 w-24" value={fleetDesired} onChange={(e) => setFleetDesired(Number(e.target.value))} /><button className="px-2 py-1 rounded border" onClick={applyFleetDesired}>Set count</button><button className="px-2 py-1 rounded border" onClick={addTruck}>Add truck</button></div>}>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {trucks.map((t: any) => (
+              <div key={t.id} className="border rounded p-3 flex items-center justify-between gap-3">
+                <div className="grow min-w-0">
+                  <input className="border rounded px-2 py-1 text-sm w-40" value={t.name} onChange={(e) => setTrucks((a: any[]) => a.map((x) => (x.id === t.id ? { ...x, name: e.target.value } : x)))} />
+                  <div className="text-xs text-slate-600 truncate">ID: {t.id}</div>
+                </div>
+                <button className="text-rose-600 text-sm" onClick={() => removeTruckById(t.id)}>Remove</button>
+              </div>
+            ))}
+          </div>
+        </Card>
 
-    <div className="flex items-center gap-2 pl-2 border-l ml-1">
-      <label className="text-xs text-slate-600">Shared</label>
-      <input
-        type="checkbox"
-        className="h-4 w-4"
-        checked={sharedOn}
-        onChange={(e) => setSharedOn(e.target.checked)}
-      />
-      <span
-        className={`text-xs ${
-          sharedOn
-            ? sharedInfo.connected
-              ? "text-green-600"
-              : "text-slate-500"
-            : "text-slate-500"
-        }`}
-      >
-        {sharedOn ? (sharedInfo.connected ? "online" : "connecting…") : "off"}
-      </span>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card title="Add Job" actions={<button form="addJob" type="submit" className="px-3 py-2 rounded-lg bg-slate-800 text-white">Add</button>}>
+            <form id="addJob" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); const type = String(f.get('type')); const job: any = { id: `J${Date.now()}`, client: String(f.get('client') || ''), type, day: String(f.get('day') || activeDay), earliest: String(f.get('earliest') || '07:00'), loadMins: type === 'Delivery' ? Number(f.get('loadMins') || 0) : 0, travelMins: Number(f.get('travelMins') || 0), onsiteMins: Number(f.get('onsiteMins') || 0), returnMins: Number(f.get('returnMins') || 0), offloadMins: type === 'Collection' ? Number(f.get('offloadMins') || 0) : 0, notes: String(f.get('notes') || ''), priority: Number(f.get('priority') || 3), assignedTruckId: null }; setJobs((j) => [...j, job]); (e.target as HTMLFormElement).reset(); setAddType('Delivery'); }} className="grid grid-cols-2 gap-3">
+              <div><label className="block text-sm">Type</label><select name="type" className="mt-1 w-full border rounded px-2 py-1" value={addType} onChange={(e) => setAddType(e.target.value)}><option>Delivery</option><option>Collection</option></select></div>
+              <div><label className="block text-sm">Day</label><select name="day" className="mt-1 w-full border rounded px-2 py-1" defaultValue={activeDay}>{DAYS.map((d) => (<option key={d} value={d}>{d}</option>))}</select></div>
+              <div><label className="block text-sm">Earliest</label><input type="time" name="earliest" className="mt-1 w-full border rounded px-2 py-1" defaultValue={startTime} /></div>
+              <div className="col-span-2"><label className="block text-sm">Client</label><input name="client" list="clientNames" className="mt-1 w-full border rounded px-2 py-1" placeholder="Type or pick a client" /><datalist id="clientNames">{clients.map((c: any) => (<option key={c.name} value={c.name} />))}</datalist></div>
+              {addType === 'Delivery' ? (<div><label className="block text-sm">Load (min)</label><input type="number" name="loadMins" min={0} className="mt-1 w-full border rounded px-2 py-1" defaultValue={0} /></div>) : (<div><label className="block text-sm">Offload (min)</label><input type="number" name="offloadMins" min={0} className="mt-1 w-full border rounded px-2 py-1" defaultValue={0} /></div>)}
+              <div><label className="block text-sm">Travel (min)</label><input type="number" name="travelMins" min={0} className="mt-1 w-full border rounded px-2 py-1" required /></div>
+              <div><label className="block text-sm">On-site (min)</label><input type="number" name="onsiteMins" min={0} className="mt-1 w-full border rounded px-2 py-1" required /></div>
+              <div><label className="block text-sm">Return (min)</label><input type="number" name="returnMins" min={0} className="mt-1 w-full border rounded px-2 py-1" defaultValue={0} /></div>
+              <div><label className="block text-sm">Priority</label><input type="number" name="priority" min={1} max={5} defaultValue={3} className="mt-1 w-full border rounded px-2 py-1" /></div>
+              <div className="col-span-2"><label className="block text-sm">Notes</label><input name="notes" className="mt-1 w-full border rounded px-2 py-1" placeholder="Gate code, forklift, etc." /></div>
+            </form>
+          </Card>
+
+          <Card title="Client Directory">
+            <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); const name = String(f.get('clientName') || '').trim(); if (!name) return; const travel = Number(f.get('clientTravel') || 0), onsite = Number(f.get('clientOnsite') || 0), notes = String(f.get('clientNotes') || ''); setClients((prev: any[]) => { const i = prev.findIndex((c) => c.name.toLowerCase() === name.toLowerCase()); const def = { travelMins: travel, onsiteMins: onsite, notes }; if (i === -1) return [...prev, { name, defaults: def }]; const cp = [...prev]; cp[i] = { ...cp[i], defaults: def }; return cp; }); (e.target as HTMLFormElement).reset(); }} className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
+              <div className="md:col-span-2"><label className="block text-sm">Client name</label><input name="clientName" className="mt-1 w-full border rounded px-2 py-1" required /></div>
+              <div><label className="block text-sm">Travel (min)</label><input name="clientTravel" type="number" min={0} className="mt-1 w-full border rounded px-2 py-1" required /></div>
+              <div><label className="block text-sm">On-site (min)</label><input name="clientOnsite" type="number" min={0} className="mt-1 w-full border rounded px-2 py-1" required /></div>
+              <div className="md:col-span-2"><label className="block text-sm">Notes</label><input name="clientNotes" className="mt-1 w-full border rounded px-2 py-1" /></div>
+              <div className="md:col-span-6 flex justify-end"><button type="submit" className="px-3 py-2 rounded-lg bg-white border">Save Defaults</button></div>
+            </form>
+            <ul className="space-y-2 max-h-64 overflow-auto">
+              {clients.map((c: any) => (
+                <li key={c.name} className="p-3 border rounded-lg">
+                  {editingClient === c.name ? (
+                    <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); const newName = String(f.get('name') || c.name).trim() || c.name; const newDefs = { travelMins: Number(f.get('t') || c.defaults.travelMins), onsiteMins: Number(f.get('o') || c.defaults.onsiteMins), notes: String(f.get('n') || c.defaults.notes || '') }; setClients((prev: any[]) => prev.map((x) => (x.name === c.name ? { name: newName, defaults: newDefs } : x))); setJobs((prev: any[]) => prev.map((j) => (j.client === c.name ? { ...j, client: newName } : j))); setEditingClient(null); }} className="space-y-2">
+                      <div className="flex items-center justify-between"><input name="name" defaultValue={c.name} className="border rounded px-2 py-1 text-sm w-64" /><div className="flex gap-2"><button type="submit" className="px-2 py-1 rounded bg-slate-800 text-white">Save</button><button type="button" className="px-2 py-1 rounded border" onClick={() => setEditingClient(null)}>Cancel</button><button type="button" className="px-2 py-1 rounded border text-rose-600" onClick={() => { const used = jobs.filter((j) => j.client === c.name).length; if (used > 0) { const repl = window.prompt(`Client \"${c.name}\" is used in ${used} job(s). Enter replacement, or blank to clear:`, ''); if (repl === null) return; setJobs((prev) => prev.map((j) => (j.client === c.name ? { ...j, client: repl } : j))); } setClients((prev) => prev.filter((x) => x.name !== c.name)); }}>Delete</button></div></div>
+                      <div className="grid md:grid-cols-3 gap-2 text-sm"><div className="bg-slate-50 rounded p-2 border space-y-1"><div className="text-slate-600 text-xs">Defaults</div><div className="flex items-center gap-2"><span className="w-16">Travel</span><input name="t" type="number" defaultValue={c.defaults.travelMins} className="border rounded px-2 py-1 w-24" /></div><div className="flex items-center gap-2"><span className="w-16">On-site</span><input name="o" type="number" defaultValue={c.defaults.onsiteMins} className="border rounded px-2 py-1 w-24" /></div><input name="n" defaultValue={c.defaults.notes || ''} className="border rounded px-2 py-1 w-full" placeholder="Notes" /></div></div>
+                    </form>
+                  ) : (
+                    <div className="flex items-center justify-between"><div className="font-medium">{c.name}</div><div className="flex gap-2"><button type="button" className="px-2 py-1 rounded-lg bg-white border" onClick={() => setEditingClient(c.name)}>Edit</button><button type="button" className="px-2 py-1 rounded-lg border text-rose-600" onClick={() => { const used = jobs.filter((j) => j.client === c.name).length; if (used > 0) { const repl = window.prompt(`Client \"${c.name}\" is used in ${used} job(s). Enter replacement, or blank to clear:`, ''); if (repl === null) return; setJobs((prev) => prev.map((j) => (j.client === c.name ? { ...j, client: repl } : j))); } setClients((prev) => prev.filter((x) => x.name !== c.name)); }}>Delete</button></div></div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+
+        <Card title="Jobs">
+          {jobs.length === 0 && <div className="text-slate-500">No jobs yet.</div>}
+          <ul className="space-y-2">
+            {jobs.filter((j: any) => j.day === activeDay).map((j: any) => (
+              <li key={j.id} className="p-3 border rounded-lg">
+                {editingJobId === j.id ? (
+                  <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget as HTMLFormElement); const next: any = { ...j, client: String(f.get('client') || j.client), type: String(f.get('type') || j.type), day: String(f.get('day') || j.day), earliest: String(f.get('earliest') || j.earliest), loadMins: Number(f.get('loadMins') || j.loadMins || 0), offloadMins: Number(f.get('offloadMins') || j.offloadMins || 0), travelMins: Number(f.get('travelMins') || j.travelMins), onsiteMins: Number(f.get('onsiteMins') || j.onsiteMins), returnMins: Number(f.get('returnMins') || j.returnMins || 0), priority: Number(f.get('priority') || j.priority || 3), assignedTruckId: (String(f.get('assignedTruckId') || j.assignedTruckId || '') || null), notes: String(f.get('notes') || j.notes || '') }; setJobs((all) => all.map((x) => (x.id === j.id ? next : x))); setEditingJobId(null); }} className="grid md:grid-cols-6 gap-2">
+                    <div className="md:col-span-2"><label className="block text-xs">Client</label><input name="client" defaultValue={j.client} list="clientNames" className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div><label className="block text-xs">Type</label><select name="type" defaultValue={j.type} className="mt-1 w-full border rounded px-2 py-1"><option>Delivery</option><option>Collection</option></select></div>
+                    <div><label className="block text-xs">Day</label><select name="day" defaultValue={j.day} className="mt-1 w-full border rounded px-2 py-1">{DAYS.map((d) => (<option key={d} value={d}>{d}</option>))}</select></div>
+                    <div><label className="block text-xs">Earliest</label><input type="time" name="earliest" defaultValue={j.earliest} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div><label className="block text-xs">Load (Delivery)</label><input type="number" name="loadMins" min={0} defaultValue={j.loadMins || 0} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div><label className="block text-xs">Offload (Collection)</label><input type="number" name="offloadMins" min={0} defaultValue={j.offloadMins || 0} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div><label className="block text-xs">Travel</label><input type="number" name="travelMins" min={0} defaultValue={j.travelMins} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div><label className="block text-xs">On-site</label><input type="number" name="onsiteMins" min={0} defaultValue={j.onsiteMins} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div><label className="block text-xs">Return</label><input type="number" name="returnMins" min={0} defaultValue={j.returnMins || 0} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div><label className="block text-xs">Priority</label><input type="number" name="priority" min={1} max={5} defaultValue={j.priority || 3} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div className="md:col-span-2"><label className="block text-xs">Assign Truck</label><select name="assignedTruckId" defaultValue={j.assignedTruckId || ''} className="mt-1 w-full border rounded px-2 py-1"><option value="">— Unassigned —</option>{trucks.map((t: any) => (<option key={t.id} value={t.id}>{t.name} ({t.id})</option>))}</select></div>
+                    <div className="md:col-span-6"><label className="block text-xs">Notes</label><input name="notes" defaultValue={j.notes || ''} className="mt-1 w-full border rounded px-2 py-1" /></div>
+                    <div className="md:col-span-6 flex justify-end gap-2"><button className="px-2 py-1 rounded bg-slate-800 text-white" type="submit">Save</button><button className="px-2 py-1 rounded border" type="button" onClick={() => setEditingJobId(null)}>Cancel</button><button className="px-2 py-1 rounded border text-rose-600" type="button" onClick={() => { setJobs((all) => all.filter((x) => x.id !== j.id)); setScheduled((s) => s.filter((x) => x.jobId !== j.id)); }}>Delete</button></div>
+                  </form>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{j.client} · {j.type}</div>
+                      <div className="text-xs text-slate-600">Earliest {j.earliest} · Travel {j.travelMins}m · On-site {j.onsiteMins}m · Return {j.returnMins || 0}m {j.type === 'Delivery' ? `· Load ${j.loadMins || 0}m` : ''}{j.type === 'Collection' ? ` · Offload ${j.offloadMins || 0}m` : ''}</div>
+                    </div>
+                    <div className="flex items-center gap-2"><span className="text-xs text-slate-600">Truck: {j.assignedTruckId || '—'}</span><button className="px-2 py-1 rounded-lg bg-white border" onClick={() => setEditingJobId(j.id)}>Edit</button></div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card title={`Schedule (auto for ${activeDay})`}>
+          {(() => {
+            const total = endMin - startMin;
+            const marks: number[] = [];
+            for (let m = startMin; m <= endMin; m += 60) marks.push(m);
+            const pct = (val: number) => (100 * (val - startMin)) / total;
+            const unscheduled = scheduled.filter((s: any) => s.day === activeDay && (!s.truckId || s.startMin == null || s.endMin == null));
+            const legend = [
+              { k: 'Load', c: 'bg-amber-300' },
+              { k: 'Travel', c: 'bg-sky-300' },
+              { k: 'On-site', c: 'bg-green-300' },
+              { k: 'Return', c: 'bg-indigo-300' },
+              { k: 'Offload', c: 'bg-rose-300' },
+            ];
+            const segs = (j: any) => {
+              const arr: { k: string; m: number; c: string }[] = [];
+              if (j.type === 'Delivery' && (j.loadMins || 0) > 0) arr.push({ k: 'Load', m: j.loadMins || 0, c: 'bg-amber-300' });
+              arr.push({ k: 'Travel', m: j.travelMins || 0, c: 'bg-sky-300' });
+              arr.push({ k: 'On-site', m: j.onsiteMins || 0, c: 'bg-green-300' });
+              if ((j.returnMins || 0) > 0) arr.push({ k: 'Return', m: j.returnMins || 0, c: 'bg-indigo-300' });
+              if (j.type === 'Collection' && (j.offloadMins || 0) > 0) arr.push({ k: 'Offload', m: j.offloadMins || 0, c: 'bg-rose-300' });
+              return arr.filter((x) => x.m > 0);
+            };
+            return (
+              <div className="space-y-3">
+                {/* Legend & timeline header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-3">{legend.map((l) => (<div key={l.k} className="flex items-center gap-1 text-xs"><span className={`inline-block w-3 h-3 rounded ${l.c}`}></span><span>{l.k}</span></div>))}</div>
+                  <div className="relative h-6 flex-1 ml-4">
+                    {marks.map((m) => (
+                      <div key={m} className="absolute top-0 bottom-0 border-l border-slate-200"><div className="absolute -top-5 text-[10px] text-slate-600" style={{ left: 0, transform: 'translateX(-50%)' }}>{hhmm(m)}</div></div>
+                    ))}
+                    {/* position marks */}
+                    {marks.map((m) => (
+                      <div key={m+':pos'} className="absolute top-0 bottom-0 border-l border-slate-200" style={{ left: pct(m) + '%' }} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Per-truck rows with hour grid + blocks */}
+                <div className="space-y-2">
+                  {trucks.map((t: any) => {
+                    const rows = scheduled
+                      .filter((s: any) => s.day === activeDay && s.truckId === t.id && s.startMin != null && s.endMin != null)
+                      .sort((a: any, b: any) => (a.startMin ?? 9e9) - (b.startMin ?? 9e9));
+                    return (
+                      <div key={t.id} className="border rounded p-2">
+                        <div className="font-medium mb-1">{t.name}</div>
+                        <div className="relative h-9 bg-slate-50 rounded">
+                          {/* hour grid */}
+                          {marks.map((m, i) => (
+                            <div key={m+':grid'} className={`absolute top-0 bottom-0 ${i === 0 ? 'border-l' : ''} border-slate-200`} style={{ left: pct(m) + '%' }} />
+                          ))}
+                          {/* job blocks */}
+                          {rows.map((s: any) => {
+                            const j = jobById[s.jobId];
+                            const left = Math.max(0, pct(s.startMin));
+                            const width = Math.max(0.8, pct(s.endMin) - pct(s.startMin));
+                            const parts = segs(j);
+                            const dur = parts.reduce((a, b) => a + b.m, 0) || 1;
+                            return (
+                              <div key={s.jobId + ':' + s.startMin} className="absolute top-1 h-7 rounded border border-slate-400 overflow-hidden shadow-sm" style={{ left: left + '%', width: width + '%' }} title={`${j.client} · ${j.type} · ${hhmm(s.startMin)}–${hhmm(s.endMin)}`}>
+                                <div className="h-full flex">
+                                  {parts.map((p) => (
+                                    <div key={p.k} className={`h-full ${p.c}`} style={{ width: (100 * p.m) / dur + '%' }} />
+                                  ))}
+                                </div>
+                                <div className="absolute inset-0 px-1 text-[10px] flex items-center justify-between bg-black/10 text-slate-900">
+                                  <span className="truncate max-w-[60%]">{j.client} · {j.type}</span>
+                                  <span>{hhmm(s.startMin)}–{hhmm(s.endMin)}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Unscheduled bucket */}
+                {unscheduled.length > 0 && (
+                  <div className="border rounded p-2">
+                    <div className="font-medium mb-1">Unscheduled</div>
+                    <ul className="text-sm space-y-1">
+                      {unscheduled.map((s: any) => { const j = jobById[s.jobId]; return (
+                        <li key={'u:'+s.jobId} className="flex items-center justify-between"><span>{j.client} · {j.type}</span><span className="text-slate-600">Earliest {j.earliest}</span></li>
+                      ); })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </Card>
+      </div>
     </div>
+  );
+}
+
   </div>
 </header>
 </div></div></div></div></div></div></div></div></div></div></div>
