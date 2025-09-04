@@ -185,4 +185,47 @@ export default function App() {
                 <button key={d} className={`px-2 py-1 rounded-md text-sm ${activeDay === d ? "bg-slate-800 text-white" : "hover:bg-slate-100"}`} onClick={() => setActiveDay(d)}>{d}</button>
               ))}
             </div>
-            <button className="px-3 py-2 rounded-lg bg-slate-800 text-white"
+               <button
+      className="px-3 py-2 rounded-lg bg-slate-800 text-white"
+      onClick={autoSchedule}
+    >
+      Auto
+    </button>
+
+    <button
+      className="px-3 py-2 rounded-lg bg-white border"
+      onClick={() => setScheduled([])}
+    >
+      Clear
+    </button>
+
+    <button
+      className="px-3 py-2 rounded-lg bg-white border"
+      onClick={printSheets}
+    >
+      Print
+    </button>
+
+    <div className="flex items-center gap-2 pl-2 border-l ml-1">
+      <label className="text-xs text-slate-600">Shared</label>
+      <input
+        type="checkbox"
+        className="h-4 w-4"
+        checked={sharedOn}
+        onChange={(e) => setSharedOn(e.target.checked)}
+      />
+      <span
+        className={`text-xs ${
+          sharedOn
+            ? sharedInfo.connected
+              ? "text-green-600"
+              : "text-slate-500"
+            : "text-slate-500"
+        }`}
+      >
+        {sharedOn ? (sharedInfo.connected ? "online" : "connecting…") : "off"}
+      </span>
+    </div>
+  </div>
+</header>
+
