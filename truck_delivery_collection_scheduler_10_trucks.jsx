@@ -5,9 +5,9 @@ import React, { useEffect, useMemo, useState } from "react";
 let __sbCreateClientP: Promise<any> | null = null;
 const getSbCreateClient = async () => {
   if (!__sbCreateClientP) {
-    const u = "https:" + "//cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-    const di: any = Function("u", "return import(u)");
-    __sbCreateClientP = di(u).then((m: any) => m.createClient);
+    const u = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+    // Use dynamic import without Function/eval; prevent Vite from rewriting it
+    __sbCreateClientP = import(/* @vite-ignore */ u).then((m: any) => m.createClient);
   }
   return __sbCreateClientP;
 };
@@ -191,7 +191,7 @@ export default function App() {
             <div className="flex items-center gap-2 pl-2 border-l ml-1">
               <label className="text-xs text-slate-600">Shared</label>
               <input type="checkbox" className="h-4 w-4" checked={sharedOn} onChange={(e) => setSharedOn(e.target.checked)} />
-              <span className={`text-xs ${sharedOn ? (sharedInfo.connected ? "text-green-600" : "text-slate-500") : "text-slate-500"}`}>{sharedOn ? (sharedInfo.connected ? "online" : "connecting…") : "off"}</span>
+              <span className={`text-xs ${sharedOn ? (sharedInfo.connected ? "text-green-600" : "text-slate-500") : "text-slate-500"}`} title={sharedInfo.error || ""}>{sharedOn ? (sharedInfo.connected ? "online" : (sharedInfo.error ? "error" : "connecting…")) : "off"}</span>
             </div>
           </div>
         </header>
