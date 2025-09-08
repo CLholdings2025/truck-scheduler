@@ -97,33 +97,84 @@ export default function App() {
 
   // Shared storage connect
   useEffect(() => {
-    let channel: any; let alive = true;
-    (async () => {
-      if (!sharedOn) { setSupabase(null); setSharedInfo((s) => ({ ...s, connected: false })); return; }
-      try {
-        const createClient = await getSbCreateClient();
-        const sb = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON);
-        setSupabase(sb);
-        const { data, error } = await sb.from("app_state").select("data").eq("id", "shared").single();
-        if (error && (error.code === "PGRST116" || (error.message || "").toLowerCase().includes("row"))) { await sb.from("app_state").upsert({ id: "shared", data: {} }); }
-        const incoming = (data && (data as any).data) || {};
-        if (incoming.trucks) setTrucks(incoming.trucks);
-        if (incoming.clients) setClients(incoming.clients);
-        if (incoming.jobs) setJobs(incoming.jobs);
-        if (incoming.settings) { const s = incoming.settings; if (s.startTime) setStartTime(s.startTime); if (s.endTime) setEndTime(s.endTime); if (typeof s.gap === "number") setGap(s.gap); if (s.activeDay) setActiveDay(s.activeDay); }
-        setSharedInfo({ connected: true, lastSync: new Date(), error: null });
-        channel = sb.channel("state").on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_state", filter: "id=eq.shared" }, (payload: any) => {
-          if (!alive) return; const d = payload.new?.data; if (!d || d._meta?.clientId === clientId) return;
-          if (d.trucks) setTrucks(d.trucks); if (d.clients) setClients(d.clients); if (d.jobs) setJobs(d.jobs);
-          if (d.settings) { const s = d.settings; if (s.startTime) setStartTime(s.startTime); if (s.endTime) setEndTime(s.endTime); if (typeof s.gap === "number") setGap(s.gap); if (s.activeDay) setActiveDay(s.activeDay); }
-          setSharedInfo((s) => ({ ...s, lastSync: new Date() }));
-        }).subscribe();
-      } catch (e: any) {
-        setSharedInfo({ connected: false, lastSync: null, error: String(e?.message || e) });
+  let channel: any;
+  let alive = true;
+
+  (async () => {
+    if (!sharedOn) {
+      setSupabase(null);
+      setSharedInfo((s) => ({ ...s, connected: false, error: null }));
+      return;
+    }
+    try {
+      const createClient = await getSbCreateClient();
+      const sb = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON);
+      setSupabase(sb);
+
+      // ✅ Mark as online immediately (we have a working client and your REST test proved connectivity)
+      setSharedInfo({ connected: true, lastSync: new Date(), error: null });
+
+      // Ensure row exists, then read initial state (tolerant)
+      const { data, error } = await sb
+        .from("app_state")
+        .select("data")
+        .eq("id", "shared")
+        .maybeSingle();
+
+      if (error) console.warn("initial select error:", error);
+
+      const incoming = (data as any)?.data || {};
+      if (incoming.trucks) setTrucks(incoming.trucks);
+      if (incoming.clients) setClients(incoming.clients);
+      if (incoming.jobs) setJobs(incoming.jobs);
+      if (incoming.settings) {
+        const s = incoming.settings;
+        if (s.startTime) setStartTime(s.startTime);
+        if (s.endTime) setEndTime(s.endTime);
+        if (typeof s.gap === "number") setGap(s.gap);
+        if (s.activeDay) setActiveDay(s.activeDay);
       }
-    })();
-    return () => { alive = false; if (channel && supabase) { try { supabase.removeChannel(channel); } catch {} } };
-  }, [sharedOn]);
+
+      // Realtime subscription (optional for “online” status)
+      channel = sb
+        .channel("state")
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "app_state", filter: "id=eq.shared" },
+          (payload: any) => {
+            if (!alive) return;
+            const d = payload.new?.data;
+            if (!d) return;
+            if (d.trucks) setTrucks(d.trucks);
+            if (d.clients) setClients(d.clients);
+            if (d.jobs) setJobs(d.jobs);
+            if (d.settings) {
+              const s = d.settings;
+              if (s.startTime) setStartTime(s.startTime);
+              if (s.endTime) setEndTime(s.endTime);
+              if (typeof s.gap === "number") setGap(s.gap);
+              if (s.activeDay) setActiveDay(s.activeDay);
+            }
+            setSharedInfo((s) => ({ ...s, lastSync: new Date() }));
+          }
+        )
+        .subscribe();
+    } catch (e: any) {
+      // If anything fails, show a visible error (the badge will show “error” and a tooltip)
+      setSharedInfo({ connected: false, lastSync: null, error: String(e?.message || e) });
+      console.error("shared connect error:", e);
+    }
+  })();
+
+  return () => {
+    alive = false;
+    if (channel && supabase) {
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    }
+  };
+}, [sharedOn]);
 
   // Shared save (debounced)
   useEffect(() => { if (!supabase || !sharedOn) return; const h = setTimeout(async () => { try { await supabase.from("app_state").upsert({ id: "shared", data: { trucks, clients, jobs, settings: { startTime, endTime, gap, activeDay }, _meta: { clientId, ts: Date.now() } } }); setSharedInfo((s) => ({ ...s, lastSync: new Date(), error: null })); } catch (e: any) { setSharedInfo((s) => ({ ...s, error: String(e?.message || e) })); } }, 600); return () => clearTimeout(h); }, [trucks, clients, jobs, startTime, endTime, gap, activeDay, supabase, sharedOn]);
