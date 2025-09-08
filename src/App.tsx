@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 // ===== Shared storage (optional, Supabase) =====
-// Load at runtime to avoid build-time CDN rewrites.
 let __sbCreateClientP: Promise<any> | null = null;
 const getSbCreateClient = async () => {
   if (!__sbCreateClientP) {
-    const u = "https:" + "//cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-    const di: any = Function("u", "return import(u)");
-    __sbCreateClientP = di(u).then((m: any) => m.createClient);
+    const u = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+    // Use regular dynamic import; no Function/eval needed
+    __sbCreateClientP = import(/* @vite-ignore */ u).then((m: any) => m.createClient);
   }
   return __sbCreateClientP;
 };
+
 const ENV = {
   SUPABASE_URL:
     (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_SUPABASE_URL) ||
