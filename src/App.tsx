@@ -671,15 +671,15 @@ const segmentsFor = (j: Job): Segment[] => {
               </div>
 
               {j.type === "Collection" && (
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Return (min)</label>
-                  <input
-                    type="number"
-                    className="border rounded px-2 py-1 w-28"
-                    value={j.returnTravelMin}
-                    onChange={(e) => updateJob(j.id, { returnTravelMin: parseInt(e.target.value || "0") })}
-                  />
-                </div>
+               <div>
+  <label className="block text-xs text-slate-500 mb-1">Return (min)</label>
+  <input
+    type="number"
+    className="border rounded px-2 py-1 w-28"
+    value={j.returnTravelMin}
+    onChange={(e) => updateJob(j.id, { returnTravelMin: parseInt(e.target.value || "0") })}
+  />
+</div>
               )}
 
               <div>
