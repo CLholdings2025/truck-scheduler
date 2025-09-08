@@ -271,7 +271,7 @@ export default function App() {
         id: uid(),
         type,
         title: `${type} Job`,
-        clientId: clients[0]?.id ?? null,
+        clientId: null,
         loadMin: 30,
         travelMin: 30,
         onsiteMin: 30,
