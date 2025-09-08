@@ -401,6 +401,8 @@ export default function App() {
                           {/* job blocks */}
                           {rows.map((s: any) => {
                             const j = jobById[s.jobId];
+                        if (!j) return null; // skip orphan rows so we don't read j.type on undefined
+
                             const left = Math.max(0, pct(s.startMin));
                             const width = Math.max(0.8, pct(s.endMin) - pct(s.startMin));
                             const parts = segs(j);
