@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-/** =========================
- *  Small helpers & constants
- *  ========================= */
+/** =======================================
+ * Helpers & constants
+ * ======================================= */
 type ID = string;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 type DayKey = typeof DAYS[number];
@@ -20,9 +20,9 @@ const toHHMM = (min: number) => {
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-/** =========================
- *  Local storage (simple)
- *  ========================= */
+/** =======================================
+ * Local storage
+ * ======================================= */
 const LS = {
   trucks: "ts_trucks",
   clients: "ts_clients",
@@ -44,9 +44,9 @@ const save = (k: string, v: any) => {
   } catch {}
 };
 
-/** =========================
- *  Data shapes
- *  ========================= */
+/** =======================================
+ * Data models
+ * ======================================= */
 type Truck = { id: ID; name: string };
 type Client = { id: ID; name: string; address?: string; phone?: string; notes?: string };
 
@@ -57,14 +57,14 @@ type Job = {
   title: string;
   clientId: ID | null;
 
-  /** times (minutes) */
-  loadMin: number; // depot loading time (Delivery) OR off-site loading time (Collection)
-  travelMin: number; // travel time to client (for Delivery: after load; for Collection: before on-site)
-  onsiteMin: number; // time on-site (Delivery: offload time, Collection: loading time)
-  returnTravelMin: number; // travel time back from client (Collection flows back to depot)
+  // Durations (minutes)
+  loadMin: number;         // Delivery: depot loading; Collection: off-site loading
+  travelMin: number;       // Travel to site
+  onsiteMin: number;       // Delivery: offload; Collection: on-site loading
+  returnTravelMin: number; // Collection: travel back to depot (Delivery often 0)
 
-  earliest?: string; // "HH:MM" soft earliest
-  latest?: string; // "HH:MM" soft latest
+  earliest?: string; // HH:MM (soft)
+  latest?: string;   // HH:MM (soft)
 
   truckId?: ID | null; // preferred truck (optional)
   notes?: string;
@@ -95,10 +95,9 @@ const DEFAULT_SETTINGS: Settings = {
   activeDay: "Mon",
 };
 
-/** =========================
- *  Supabase (CDN, CSP-safe)
- *  Reads keys from public/env.js (window.ENV_*)
- *  ========================= */
+/** =======================================
+ * Supabase via CDN (reads keys from public/env.js)
+ * ======================================= */
 declare global {
   interface Window {
     ENV_SUPABASE_URL?: string;
@@ -121,23 +120,21 @@ const getSbCreateClient = async () => {
   return __sbCreateClientP;
 };
 
-/** =========================
- *  The App
- *  ========================= */
+/** =======================================
+ * App
+ * ======================================= */
 export default function App() {
-  /** Core state */
+  // Core state
   const [trucks, setTrucks] = useState<Truck[]>(
     load<Truck[]>(LS.trucks, Array.from({ length: 10 }, (_, i) => ({ id: uid(), name: `Truck ${i + 1}` })))
   );
   const [clients, setClients] = useState<Client[]>(load<Client[]>(LS.clients, []));
-  const [jobs, setJobs] = useState<Job[]>(
-    load<Job[]>(LS.jobs, [])
-  );
+  const [jobs, setJobs] = useState<Job[]>(load<Job[]>(LS.jobs, []));
   const [scheduled, setScheduled] = useState<ScheduledRow[]>(load<ScheduledRow[]>(LS.scheduled, []));
   const [settings, setSettings] = useState<Settings>(load<Settings>(LS.settings, DEFAULT_SETTINGS));
   const { startTime, endTime, gap, bufferBetweenJobs, activeDay } = settings;
 
-  /** Derived */
+  // Derived
   const startMin = toMin(startTime);
   const endMin = toMin(endTime);
 
@@ -145,14 +142,14 @@ export default function App() {
   const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c])), [clients]);
   const truckById = useMemo(() => Object.fromEntries(trucks.map((t) => [t.id, t])), [trucks]);
 
-  /** Persist locally (when not shared) */
+  // Persist locally
   useEffect(() => save(LS.trucks, trucks), [trucks]);
   useEffect(() => save(LS.clients, clients), [clients]);
   useEffect(() => save(LS.jobs, jobs), [jobs]);
   useEffect(() => save(LS.scheduled, scheduled), [scheduled]);
   useEffect(() => save(LS.settings, settings), [settings]);
 
-  /** Guard: drop orphan schedule rows when jobs change (prevents j.type crash) */
+  // Guard: delete orphan schedule rows when jobs change (prevents j.type crash)
   useEffect(() => {
     setScheduled((s) => s.filter((x) => jobs.some((j) => j.id === x.jobId)));
   }, [jobs]);
@@ -160,14 +157,11 @@ export default function App() {
   /** ============ Shared (Supabase) ============ */
   const [sharedOn, setSharedOn] = useState(false);
   const [sharedInfo, setSharedInfo] = useState<{ connected: boolean; lastSync: Date | null; error: string | null }>({
-    connected: false,
-    lastSync: null,
-    error: null,
+    connected: false, lastSync: null, error: null
   });
   const [supabase, setSupabase] = useState<any>(null);
   const saveDebounce = useRef<number | null>(null);
 
-  // Connect / subscribe
   useEffect(() => {
     let channel: any;
     let alive = true;
@@ -183,11 +177,9 @@ export default function App() {
         const createClient = await getSbCreateClient();
         const sb = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON);
         setSupabase(sb);
-
-        // Mark online immediately (we know connectivity works)
         setSharedInfo({ connected: true, lastSync: new Date(), error: null });
 
-        // Ensure row exists, then read initial state (tolerant)
+        // Ensure row exists & read it
         await sb.from("app_state").upsert({ id: "shared", data: {} }).eq("id", "shared");
         const { data, error } = await sb.from("app_state").select("data").eq("id", "shared").maybeSingle();
         if (error) console.warn("initial select error:", error);
@@ -198,7 +190,7 @@ export default function App() {
         if (incoming.scheduled) setScheduled(incoming.scheduled);
         if (incoming.settings) setSettings((s) => ({ ...s, ...incoming.settings }));
 
-        // Realtime
+        // Realtime updates
         channel = sb
           .channel("state")
           .on(
@@ -225,14 +217,12 @@ export default function App() {
     return () => {
       alive = false;
       if (channel && supabase) {
-        try {
-          supabase.removeChannel(channel);
-        } catch {}
+        try { supabase.removeChannel(channel); } catch {}
       }
     };
   }, [sharedOn]); // eslint-disable-line
 
-  // Save to shared (debounced)
+  // Debounced shared save
   useEffect(() => {
     if (!sharedOn || !supabase || !sharedInfo.connected) return;
     if (saveDebounce.current) window.clearTimeout(saveDebounce.current);
@@ -248,12 +238,13 @@ export default function App() {
     }, 350);
   }, [sharedOn, supabase, sharedInfo.connected, trucks, clients, jobs, scheduled, settings]);
 
-  /** ============ UI Actions ============ */
+  /** =======================================
+   * UI actions
+   * ======================================= */
   // Trucks
   const addTruck = () => setTrucks((t) => [...t, { id: uid(), name: `Truck ${t.length + 1}` }]);
   const removeTruck = (id: ID) => {
     setTrucks((t) => t.filter((x) => x.id !== id));
-    // also drop scheduled for that truck
     setScheduled((s) => s.filter((r) => r.truckId !== id));
   };
 
@@ -263,7 +254,6 @@ export default function App() {
     setClients((c) => c.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const removeClient = (id: ID) => {
     setClients((c) => c.filter((x) => x.id !== id));
-    // remove client from jobs (keep job but null the clientId)
     setJobs((j) => j.map((x) => (x.clientId === id ? { ...x, clientId: null } : x)));
   };
 
@@ -287,29 +277,45 @@ export default function App() {
     setJobs((j) => j.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const removeJob = (id: ID) => {
     setJobs((j) => j.filter((x) => x.id !== id));
-    // also remove any scheduled rows pointing to it (prevents orphan)
     setScheduled((s) => s.filter((r) => r.jobId !== id));
   };
 
-  // Schedule helpers
+  // Scheduling helpers
   const placeOnSchedule = (jobId: ID, truckId: ID, day: DayKey, start: number, end: number) => {
     setScheduled((s) => [
-      ...s.filter((r) => !(r.jobId === jobId && r.day === day)), // ensure single placement per day
+      ...s.filter((r) => !(r.jobId === jobId && r.day === day)),
       { id: uid(), jobId, truckId, day, startMin: start, endMin: end },
     ]);
   };
 
-  /** Compute a single job total duration & simple segment label (for block color/label) */
   const jobDuration = (j: Job) => {
     if (!j) return 0;
     if (j.type === "Delivery") return j.loadMin + j.travelMin + j.onsiteMin;
-    // Collection: travel -> onsite loading -> return travel
     return j.travelMin + j.onsiteMin + j.returnTravelMin;
+    // (Return leg for Delivery is typically 0 in this model)
   };
 
-  /** Very simple autoscheduler: greedily place jobs on chosen day, per truck, respecting buffers */
+  // "Classic" segmented phases (colored)
+  type Segment = { label: string; color: string; minutes: number };
+  const segmentsFor = (j: Job): Segment[] => {
+    if (!j) return [];
+    if (j.type === "Delivery") {
+      return [
+        { label: "Load",   color: "bg-sky-500",     minutes: j.loadMin },
+        { label: "Travel", color: "bg-blue-500",    minutes: j.travelMin },
+        { label: "Offload",color: "bg-emerald-500", minutes: j.onsiteMin },
+      ].filter(seg => seg.minutes > 0);
+    } else {
+      return [
+        { label: "Travel",  color: "bg-orange-500", minutes: j.travelMin },
+        { label: "On-site", color: "bg-amber-500",  minutes: j.onsiteMin },
+        { label: "Return",  color: "bg-orange-400", minutes: j.returnTravelMin },
+      ].filter(seg => seg.minutes > 0);
+    }
+  };
+
+  // Simple greedy autoscheduler (respects bufferBetweenJobs & gap)
   const autoSchedule = () => {
-    // make per-truck queues of jobs that prefer that truck or any
     const byTruck: Record<ID, Job[]> = {};
     for (const t of trucks) byTruck[t.id] = [];
     const unslotted: Job[] = [];
@@ -317,16 +323,13 @@ export default function App() {
       if (j.truckId && byTruck[j.truckId]) byTruck[j.truckId].push(j);
       else unslotted.push(j);
     }
-    // fill each truck day timeline
     let nextStartPerTruck: Record<ID, number> = {};
     for (const t of trucks) nextStartPerTruck[t.id] = startMin;
 
+    const snap = (m: number) => Math.ceil(m / gap) * gap;
     const place = (j: Job, truckId: ID) => {
       const dur = jobDuration(j);
-      let st = nextStartPerTruck[truckId];
-      // snap to gap grid
-      const snap = (m: number) => Math.ceil(m / gap) * gap;
-      st = snap(st);
+      let st = snap(nextStartPerTruck[truckId]);
       const en = st + dur;
       if (en <= endMin) {
         placeOnSchedule(j.id, truckId, activeDay, st, en);
@@ -336,26 +339,15 @@ export default function App() {
       return false;
     };
 
-    // 1) Place preferred
-    for (const t of trucks) {
-      for (const j of byTruck[t.id]) place(j, t.id);
-    }
-    // 2) Place remaining where fits earliest
+    for (const t of trucks) for (const j of byTruck[t.id]) place(j, t.id);
     for (const j of unslotted) {
-      let placed = false;
-      for (const t of trucks) {
-        if (place(j, t.id)) {
-          placed = true;
-          break;
-        }
-      }
-      if (!placed) {
-        // leave unscheduled
-      }
+      let ok = false;
+      for (const t of trucks) { if (place(j, t.id)) { ok = true; break; } }
+      if (!ok) { /* remains unscheduled */ }
     }
   };
 
-  /** Timeline hour marks */
+  // Hour ticks
   const marks = useMemo(() => {
     const res: { m: number; label: string }[] = [];
     let m = startMin - (startMin % 60);
@@ -363,7 +355,9 @@ export default function App() {
     return res;
   }, [startMin, endMin]);
 
-  /** ============ UI ============ */
+  /** =======================================
+   * UI
+   * ======================================= */
   return (
     <div className="min-h-screen p-4 text-slate-900">
       {/* Header */}
@@ -371,16 +365,10 @@ export default function App() {
         <h1 className="text-xl font-semibold">Truck Delivery &amp; Collection Scheduler</h1>
         <div className="flex items-center gap-2 ml-auto">
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={sharedOn}
-              onChange={(e) => setSharedOn(e.target.checked)}
-            />
+            <input type="checkbox" checked={sharedOn} onChange={(e) => setSharedOn(e.target.checked)} />
             Shared:
             <span
-              className={`text-xs ${
-                sharedOn ? (sharedInfo.connected ? "text-green-600" : "text-slate-500") : "text-slate-500"
-              }`}
+              className={`text-xs ${sharedOn ? (sharedInfo.connected ? "text-green-600" : "text-slate-500") : "text-slate-500"}`}
               title={sharedInfo.error || ""}
             >
               {sharedOn ? (sharedInfo.connected ? "online" : sharedInfo.error ? "error" : "connecting…") : "off"}
@@ -401,9 +389,7 @@ export default function App() {
               <button
                 key={d}
                 onClick={() => setSettings((s) => ({ ...s, activeDay: d }))}
-                className={`px-2 py-1 rounded border ${
-                  activeDay === d ? "bg-slate-900 text-white" : "bg-white"
-                }`}
+                className={`px-2 py-1 rounded border ${activeDay === d ? "bg-slate-900 text-white" : "bg-white"}`}
               >
                 {d}
               </button>
@@ -440,19 +426,11 @@ export default function App() {
               type="number"
               className="border rounded px-2 py-1 w-24"
               value={bufferBetweenJobs}
-              onChange={(e) =>
-                setSettings((s) => ({ ...s, bufferBetweenJobs: parseInt(e.target.value || "0") }))
-              }
+              onChange={(e) => setSettings((s) => ({ ...s, bufferBetweenJobs: parseInt(e.target.value || "0") }))}
               min={0}
               step={5}
             />
-            <button
-              className="ml-auto px-3 py-1 rounded bg-slate-900 text-white"
-              onClick={autoSchedule}
-              title="Auto place jobs on active day"
-            >
-              Auto
-            </button>
+            <button className="ml-auto px-3 py-1 rounded bg-slate-900 text-white" onClick={autoSchedule}>Auto</button>
           </div>
         </div>
 
@@ -460,9 +438,7 @@ export default function App() {
         <div className="p-3 rounded-lg border bg-white">
           <div className="flex items-center mb-2">
             <div className="font-medium">Trucks</div>
-            <button className="ml-auto px-2 py-1 rounded border" onClick={addTruck}>
-              + Add
-            </button>
+            <button className="ml-auto px-2 py-1 rounded border" onClick={addTruck}>+ Add</button>
           </div>
           <div className="space-y-2 max-h-64 overflow-auto pr-1">
             {trucks.map((t) => (
@@ -470,13 +446,9 @@ export default function App() {
                 <input
                   className="border rounded px-2 py-1 flex-1"
                   value={t.name}
-                  onChange={(e) =>
-                    setTrucks((arr) => arr.map((x) => (x.id === t.id ? { ...x, name: e.target.value } : x)))
-                  }
+                  onChange={(e) => setTrucks((arr) => arr.map((x) => (x.id === t.id ? { ...x, name: e.target.value } : x)))}
                 />
-                <button className="px-2 py-1 rounded border" onClick={() => removeTruck(t.id)}>
-                  Del
-                </button>
+                <button className="px-2 py-1 rounded border" onClick={() => removeTruck(t.id)}>Del</button>
               </div>
             ))}
           </div>
@@ -486,40 +458,16 @@ export default function App() {
         <div className="p-3 rounded-lg border bg-white">
           <div className="flex items-center mb-2">
             <div className="font-medium">Clients</div>
-            <button className="ml-auto px-2 py-1 rounded border" onClick={addClient}>
-              + Add
-            </button>
+            <button className="ml-auto px-2 py-1 rounded border" onClick={addClient}>+ Add</button>
           </div>
           <div className="space-y-2 max-h-64 overflow-auto pr-1">
             {clients.map((c) => (
               <div key={c.id} className="grid grid-cols-5 gap-2 items-center">
-                <input
-                  className="border rounded px-2 py-1 col-span-2"
-                  value={c.name}
-                  onChange={(e) => updateClient(c.id, { name: e.target.value })}
-                  placeholder="Client name"
-                />
-                <input
-                  className="border rounded px-2 py-1"
-                  value={c.address || ""}
-                  onChange={(e) => updateClient(c.id, { address: e.target.value })}
-                  placeholder="Address"
-                />
-                <input
-                  className="border rounded px-2 py-1"
-                  value={c.phone || ""}
-                  onChange={(e) => updateClient(c.id, { phone: e.target.value })}
-                  placeholder="Phone"
-                />
-                <button className="px-2 py-1 rounded border" onClick={() => removeClient(c.id)}>
-                  Del
-                </button>
-                <textarea
-                  className="mt-1 border rounded px-2 py-1 col-span-5"
-                  value={c.notes || ""}
-                  onChange={(e) => updateClient(c.id, { notes: e.target.value })}
-                  placeholder="Notes"
-                />
+                <input className="border rounded px-2 py-1 col-span-2" value={c.name} onChange={(e) => updateClient(c.id, { name: e.target.value })} placeholder="Client name" />
+                <input className="border rounded px-2 py-1" value={c.address || ""} onChange={(e) => updateClient(c.id, { address: e.target.value })} placeholder="Address" />
+                <input className="border rounded px-2 py-1" value={c.phone || ""} onChange={(e) => updateClient(c.id, { phone: e.target.value })} placeholder="Phone" />
+                <button className="px-2 py-1 rounded border" onClick={() => removeClient(c.id)}>Del</button>
+                <textarea className="mt-1 border rounded px-2 py-1 col-span-5" value={c.notes || ""} onChange={(e) => updateClient(c.id, { notes: e.target.value })} placeholder="Notes" />
               </div>
             ))}
           </div>
@@ -531,126 +479,50 @@ export default function App() {
         <div className="flex items-center mb-2">
           <div className="font-medium">Jobs</div>
           <div className="ml-auto flex gap-2">
-            <button className="px-2 py-1 rounded border" onClick={() => addJob("Collection")}>
-              + Collection
-            </button>
-            <button className="px-2 py-1 rounded border" onClick={() => addJob("Delivery")}>
-              + Delivery
-            </button>
+            <button className="px-2 py-1 rounded border" onClick={() => addJob("Collection")}>+ Collection</button>
+            <button className="px-2 py-1 rounded border" onClick={() => addJob("Delivery")}>+ Delivery</button>
           </div>
         </div>
         <div className="space-y-3 max-h-80 overflow-auto pr-1">
           {jobs.map((j) => (
             <div key={j.id} className="grid md:grid-cols-12 gap-2 items-center">
-              <select
-                className="border rounded px-2 py-1 md:col-span-2"
-                value={j.type}
-                onChange={(e) => updateJob(j.id, { type: e.target.value as JobType })}
-              >
+              <select className="border rounded px-2 py-1 md:col-span-2" value={j.type} onChange={(e) => updateJob(j.id, { type: e.target.value as JobType })}>
                 <option>Delivery</option>
                 <option>Collection</option>
               </select>
-              <input
-                className="border rounded px-2 py-1 md:col-span-2"
-                value={j.title}
-                onChange={(e) => updateJob(j.id, { title: e.target.value })}
-                placeholder="Title"
-              />
-              <select
-                className="border rounded px-2 py-1 md:col-span-2"
-                value={j.clientId || ""}
-                onChange={(e) => updateJob(j.id, { clientId: e.target.value || null })}
-              >
+              <input className="border rounded px-2 py-1 md:col-span-2" value={j.title} onChange={(e) => updateJob(j.id, { title: e.target.value })} placeholder="Title" />
+              <select className="border rounded px-2 py-1 md:col-span-2" value={j.clientId || ""} onChange={(e) => updateJob(j.id, { clientId: e.target.value || null })}>
                 <option value="">— Client —</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <select
-                className="border rounded px-2 py-1 md:col-span-2"
-                value={j.truckId || ""}
-                onChange={(e) => updateJob(j.id, { truckId: e.target.value || null })}
-              >
+              <select className="border rounded px-2 py-1 md:col-span-2" value={j.truckId || ""} onChange={(e) => updateJob(j.id, { truckId: e.target.value || null })}>
                 <option value="">— Any truck —</option>
-                {trucks.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
+                {trucks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
 
               {/* Times */}
-              <input
-                type="number"
-                className="border rounded px-2 py-1 w-24"
-                value={j.loadMin}
-                onChange={(e) => updateJob(j.id, { loadMin: parseInt(e.target.value || "0") })}
-                title={j.type === "Delivery" ? "Depot loading (min)" : "Off-site loading (min)"}
-                placeholder={j.type === "Delivery" ? "Load (min)" : "Off-site load (min)"}
-              />
-              <input
-                type="number"
-                className="border rounded px-2 py-1 w-24"
-                value={j.travelMin}
-                onChange={(e) => updateJob(j.id, { travelMin: parseInt(e.target.value || "0") })}
-                title="Travel to client (min)"
-                placeholder="Travel (min)"
-              />
-              <input
-                type="number"
-                className="border rounded px-2 py-1 w-24"
-                value={j.onsiteMin}
-                onChange={(e) => updateJob(j.id, { onsiteMin: parseInt(e.target.value || "0") })}
-                title={j.type === "Delivery" ? "On-site offload (min)" : "On-site loading (min)"}
-                placeholder="On-site (min)"
-              />
+              <input type="number" className="border rounded px-2 py-1 w-24" value={j.loadMin} onChange={(e) => updateJob(j.id, { loadMin: parseInt(e.target.value || "0") })} title={j.type === "Delivery" ? "Depot loading (min)" : "Off-site loading (min)"} placeholder={j.type === "Delivery" ? "Load (min)" : "Off-site load (min)"} />
+              <input type="number" className="border rounded px-2 py-1 w-24" value={j.travelMin} onChange={(e) => updateJob(j.id, { travelMin: parseInt(e.target.value || "0") })} title="Travel to site (min)" placeholder="Travel (min)" />
+              <input type="number" className="border rounded px-2 py-1 w-24" value={j.onsiteMin} onChange={(e) => updateJob(j.id, { onsiteMin: parseInt(e.target.value || "0") })} title={j.type === "Delivery" ? "On-site offload (min)" : "On-site loading (min)"} placeholder="On-site (min)" />
               {j.type === "Collection" && (
-                <input
-                  type="number"
-                  className="border rounded px-2 py-1 w-28"
-                  value={j.returnTravelMin}
-                  onChange={(e) => updateJob(j.id, { returnTravelMin: parseInt(e.target.value || "0") })}
-                  title="Travel back to depot (min)"
-                  placeholder="Return travel (min)"
-                />
+                <input type="number" className="border rounded px-2 py-1 w-28" value={j.returnTravelMin} onChange={(e) => updateJob(j.id, { returnTravelMin: parseInt(e.target.value || "0") })} title="Return travel (min)" placeholder="Return (min)" />
               )}
 
-              <input
-                className="border rounded px-2 py-1 w-24"
-                value={j.earliest || ""}
-                onChange={(e) => updateJob(j.id, { earliest: e.target.value })}
-                placeholder="Earliest (HH:MM)"
-                title="Soft earliest"
-              />
-              <input
-                className="border rounded px-2 py-1 w-24"
-                value={j.latest || ""}
-                onChange={(e) => updateJob(j.id, { latest: e.target.value })}
-                placeholder="Latest (HH:MM)"
-                title="Soft latest"
-              />
-              <button className="px-2 py-1 rounded border" onClick={() => removeJob(j.id)}>
-                Del
-              </button>
-              <textarea
-                className="md:col-span-12 border rounded px-2 py-1"
-                value={j.notes || ""}
-                onChange={(e) => updateJob(j.id, { notes: e.target.value })}
-                placeholder="Notes"
-              />
+              <input className="border rounded px-2 py-1 w-24" value={j.earliest || ""} onChange={(e) => updateJob(j.id, { earliest: e.target.value })} placeholder="Earliest (HH:MM)" title="Soft earliest" />
+              <input className="border rounded px-2 py-1 w-24" value={j.latest || ""} onChange={(e) => updateJob(j.id, { latest: e.target.value })} placeholder="Latest (HH:MM)" title="Soft latest" />
+              <button className="px-2 py-1 rounded border" onClick={() => removeJob(j.id)}>Del</button>
+              <textarea className="md:col-span-12 border rounded px-2 py-1" value={j.notes || ""} onChange={(e) => updateJob(j.id, { notes: e.target.value })} placeholder="Notes" />
             </div>
           ))}
         </div>
       </div>
 
-      {/* Schedule Grid */}
+      {/* Schedule */}
       <div className="mt-4 p-3 rounded-lg border bg-white">
         <div className="font-medium mb-2">Schedule — {activeDay}</div>
 
-        {/* Hour ruler */}
-        <div className="relative h-8 border rounded mb-2 overflow-hidden">
+        {/* Hour ruler with labels */}
+        <div className="relative h-8 border rounded mb-2 overflow-hidden bg-white">
           {marks.map((mk) => (
             <div key={mk.m} className="absolute top-0 bottom-0" style={{ left: `${((mk.m - startMin) / (endMin - startMin)) * 100}%` }}>
               <div className="h-full w-px bg-slate-200" />
@@ -660,34 +532,32 @@ export default function App() {
         </div>
 
         {/* Truck rows */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {trucks.map((t) => {
             const rows = scheduled
-              .filter(
-                (s) =>
-                  s.day === activeDay &&
-                  s.truckId === t.id &&
-                  s.startMin != null &&
-                  s.endMin != null &&
-                  jobById[s.jobId] // ✅ only entries with a valid job
+              .filter((s) =>
+                s.day === activeDay &&
+                s.truckId === t.id &&
+                s.startMin != null &&
+                s.endMin != null &&
+                jobById[s.jobId] // only with existing jobs
               )
               .sort((a, b) => a.startMin - b.startMin);
 
             const unscheduled = scheduled
-              .filter(
-                (s) =>
-                  s.day === activeDay &&
-                  (!s.truckId || s.startMin == null || s.endMin == null)
+              .filter((s) =>
+                s.day === activeDay && (!s.truckId || s.startMin == null || s.endMin == null)
               )
-              .filter((s) => jobById[s.jobId]); // ✅ only entries with a valid job
+              .filter((s) => jobById[s.jobId]);
 
             return (
               <div key={t.id} className="border rounded">
                 <div className="px-2 py-1 bg-slate-50 border-b flex items-center justify-between">
                   <div className="font-medium">{t.name}</div>
                 </div>
-                <div className="relative h-16">
-                  {/* hour grid */}
+
+                {/* Timeline for this truck */}
+                <div className="relative h-16 bg-white">
                   {marks.map((mk) => (
                     <div
                       key={mk.m + ":grid"}
@@ -698,37 +568,61 @@ export default function App() {
                     </div>
                   ))}
 
-                  {/* scheduled blocks */}
+                  {/* Scheduled jobs as segmented blocks */}
                   {rows.map((s) => {
                     const j = jobById[s.jobId];
-                    if (!j) return null; // ✅ guard
+                    if (!j) return null;
+                    const total = Math.max(1, jobDuration(j));
                     const leftPct = ((s.startMin - startMin) / (endMin - startMin)) * 100;
                     const widthPct = ((s.endMin - s.startMin) / (endMin - startMin)) * 100;
-                    const color = j.type === "Delivery" ? "bg-emerald-500" : "bg-amber-500";
-                    const clientName = j.clientId ? clientById[j.clientId]?.name || "Client" : "Client";
+                    const clientName = j.clientId ? (clientById[j.clientId]?.name || "Client") : "Client";
+                    const segs = segmentsFor(j);
+
                     return (
                       <div
                         key={s.id}
-                        className={`absolute top-1 bottom-1 ${color} text-white rounded px-2 py-1 text-xs overflow-hidden`}
-                        style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: 24 }}
+                        className="absolute top-1 bottom-1 rounded border border-slate-300 bg-white/90 overflow-hidden"
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: 28 }}
                         title={`${j.type} • ${clientName} • ${toHHMM(s.startMin)}–${toHHMM(s.endMin)}`}
                       >
-                        <div className="truncate">{j.type}: {clientName}</div>
-                        <div className="opacity-80">{toHHMM(s.startMin)}–{toHHMM(s.endMin)}</div>
+                        <div className="px-1 text-[11px] font-medium truncate">{j.type}: {clientName}</div>
+                        <div className="h-[18px] w-full relative">
+                          {/* Per-phase colored bars */}
+                          {(() => {
+                            let acc = 0;
+                            return segs.map((sg, i) => {
+                              const w = (sg.minutes / total) * 100;
+                              const l = (acc / total) * 100;
+                              acc += sg.minutes;
+                              if (w <= 0) return null;
+                              return (
+                                <div
+                                  key={i}
+                                  className={`absolute top-0 bottom-0 ${sg.color} text-[10px] text-white/95 flex items-center justify-center`}
+                                  style={{ left: `${l}%`, width: `${w}%`, minWidth: 6 }}
+                                  title={`${sg.label} • ${sg.minutes} min`}
+                                >
+                                  <span className="px-1 truncate">{sg.label}</span>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                        <div className="px-1 text-[10px] text-slate-700">{toHHMM(s.startMin)}–{toHHMM(s.endMin)}</div>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Unscheduled panel for this truck/day (optional display) */}
+                {/* Unscheduled chips (for this day) */}
                 {unscheduled.length > 0 && (
                   <div className="p-2 border-t bg-slate-50">
                     <div className="text-xs font-medium mb-1">Unscheduled for {activeDay}</div>
                     <div className="flex flex-wrap gap-2">
                       {unscheduled.map((s) => {
                         const j = jobById[s.jobId];
-                        if (!j) return null; // ✅ guard
-                        const clientName = j.clientId ? clientById[j.clientId]?.name || "Client" : "Client";
+                        if (!j) return null;
+                        const clientName = j.clientId ? (clientById[j.clientId]?.name || "Client") : "Client";
                         return (
                           <div key={s.id} className="px-2 py-1 rounded border bg-white text-xs">
                             {j.type}: {clientName}
@@ -747,60 +641,51 @@ export default function App() {
       {/* Quick place helper */}
       <div className="mt-4 p-3 rounded-lg border bg-white">
         <div className="font-medium mb-2">Quick place</div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-sm text-slate-600">Pick a job and a truck, then place within day window.</span>
-          <QuickPlace
-            jobs={jobs}
-            trucks={trucks}
-            onPlace={(jobId, truckId) => {
-              const j = jobById[jobId];
-              if (!j) return;
-              const dur = jobDuration(j);
-              // find earliest free on that truck
-              const existing = scheduled
-                .filter((s) => s.day === activeDay && s.truckId === truckId && jobById[s.jobId])
-                .sort((a, b) => a.startMin - b.startMin);
+        <QuickPlace
+          jobs={jobs}
+          trucks={trucks}
+          onPlace={(jobId, truckId) => {
+            const j = jobById[jobId];
+            if (!j) return;
+            const dur = jobDuration(j);
+            const existing = scheduled
+              .filter((s) => s.day === activeDay && s.truckId === truckId && jobById[s.jobId])
+              .sort((a, b) => a.startMin - b.startMin);
 
-              let cur = toMin(settings.startTime);
-              const end = toMin(settings.endTime);
-              const snap = (m: number) => Math.ceil(m / gap) * gap;
+            const snap = (m: number) => Math.ceil(m / gap) * gap;
+            let cur = toMin(settings.startTime);
+            const end = toMin(settings.endTime);
 
-              const fitsAt = (st: number) => {
-                const en = st + dur;
-                for (const r of existing) {
-                  if (en > r.startMin && st < r.endMin) return false;
-                }
-                return en <= end;
-              };
-
-              // Walk forward
-              while (cur + dur <= end) {
-                cur = snap(cur);
-                if (fitsAt(cur)) {
-                  placeOnSchedule(jobId, truckId, activeDay, cur, cur + dur);
-                  break;
-                }
-                cur += gap;
+            const fitsAt = (st: number) => {
+              const en = st + dur;
+              for (const r of existing) {
+                if (en > r.startMin && st < r.endMin) return false;
               }
-            }}
-          />
-        </div>
+              return en <= end;
+            };
+
+            while (cur + dur <= end) {
+              cur = snap(cur);
+              if (fitsAt(cur)) {
+                placeOnSchedule(jobId, truckId, activeDay, cur, cur + dur);
+                break;
+              }
+              cur += gap;
+            }
+          }}
+        />
       </div>
     </div>
   );
 }
 
-/** =========================
- *  Quick place component
- *  ========================= */
+/** =======================================
+ * QuickPlace component
+ * ======================================= */
 function QuickPlace({
-  jobs,
-  trucks,
-  onPlace,
+  jobs, trucks, onPlace,
 }: {
-  jobs: Job[];
-  trucks: Truck[];
-  onPlace: (jobId: ID, truckId: ID) => void;
+  jobs: Job[]; trucks: Truck[]; onPlace: (jobId: ID, truckId: ID) => void;
 }) {
   const [jobId, setJobId] = useState<ID>("");
   const [truckId, setTruckId] = useState<ID>("");
@@ -809,25 +694,13 @@ function QuickPlace({
     <div className="flex gap-2 items-center">
       <select className="border rounded px-2 py-1" value={jobId} onChange={(e) => setJobId(e.target.value)}>
         <option value="">— Job —</option>
-        {jobs.map((j) => (
-          <option key={j.id} value={j.id}>
-            {j.title} ({j.type})
-          </option>
-        ))}
+        {jobs.map((j) => <option key={j.id} value={j.id}>{j.title} ({j.type})</option>)}
       </select>
       <select className="border rounded px-2 py-1" value={truckId} onChange={(e) => setTruckId(e.target.value)}>
         <option value="">— Truck —</option>
-        {trucks.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
-        ))}
+        {trucks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
       </select>
-      <button
-        className="px-3 py-1 rounded bg-slate-900 text-white disabled:opacity-50"
-        disabled={!jobId || !truckId}
-        onClick={() => onPlace(jobId, truckId)}
-      >
+      <button className="px-3 py-1 rounded bg-slate-900 text-white disabled:opacity-50" disabled={!jobId || !truckId} onClick={() => onPlace(jobId, truckId)}>
         Place
       </button>
     </div>
