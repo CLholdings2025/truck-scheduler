@@ -312,11 +312,16 @@ export default function App() {
   };
 
   // Durations
-  const jobDuration = (j: Job) => {
-    if (!j) return 0;
-    if (j.type === "Delivery") return j.loadMin + j.travelMin + j.onsiteMin;
-    return j.travelMin + j.onsiteMin + j.returnTravelMin;
-  };
+const jobDuration = (j: Job) => {
+  if (!j) return 0;
+  if (j.type === "Delivery") {
+    // Delivery: depot Load + Travel to site + Offload + optional Return
+    return j.loadMin + j.travelMin + j.onsiteMin + (j.returnTravelMin || 0);
+  }
+  // Collection: Off-site Load + Travel to site + On-site load + Return
+  return j.loadMin + j.travelMin + j.onsiteMin + (j.returnTravelMin || 0);
+};
+
 
   // Save button: place a single job at earliest available slot today
   const earliestSlotOnTruck = (truckId: ID, dur: number) => {
@@ -362,23 +367,26 @@ export default function App() {
   };
 
   // Segments (classic colors)
-  type Segment = { label: string; color: string; minutes: number };
-  const segmentsFor = (j: Job): Segment[] => {
-    if (!j) return [];
-    if (j.type === "Delivery") {
-      return [
-        { label: "Load",   color: "bg-sky-500",     minutes: j.loadMin },
-        { label: "Travel", color: "bg-blue-500",    minutes: j.travelMin },
-        { label: "Offload",color: "bg-emerald-500", minutes: j.onsiteMin },
-      ].filter(seg => seg.minutes > 0);
-    } else {
-      return [
-        { label: "Travel",  color: "bg-orange-500", minutes: j.travelMin },
-        { label: "On-site", color: "bg-amber-500",  minutes: j.onsiteMin },
-        { label: "Return",  color: "bg-orange-400", minutes: j.returnTravelMin },
-      ].filter(seg => seg.minutes > 0);
-    }
-  };
+type Segment = { label: string; color: string; minutes: number };
+const segmentsFor = (j: Job): Segment[] => {
+  if (!j) return [];
+  if (j.type === "Delivery") {
+    return [
+      { label: "Load",    color: "bg-sky-500",     minutes: j.loadMin },
+      { label: "Travel",  color: "bg-blue-500",    minutes: j.travelMin },
+      { label: "Offload", color: "bg-emerald-500", minutes: j.onsiteMin },
+      { label: "Return",  color: "bg-indigo-400",  minutes: j.returnTravelMin || 0 },
+    ].filter(seg => seg.minutes > 0);
+  } else {
+    return [
+      { label: "Off-site load", color: "bg-rose-500",   minutes: j.loadMin },
+      { label: "Travel",        color: "bg-orange-500", minutes: j.travelMin },
+      { label: "On-site",       color: "bg-amber-500",  minutes: j.onsiteMin },
+      { label: "Return",        color: "bg-orange-400", minutes: j.returnTravelMin || 0 },
+    ].filter(seg => seg.minutes > 0);
+  }
+};
+
 
   // Simple greedy autoscheduler
   const autoSchedule = () => {
