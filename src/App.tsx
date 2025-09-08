@@ -351,7 +351,7 @@ export default function App() {
             const marks: number[] = [];
             for (let m = startMin; m <= endMin; m += 60) marks.push(m);
             const pct = (val: number) => (100 * (val - startMin)) / total;
-            const unscheduled = scheduled.filter((s: any) => s.day === activeDay && (!s.truckId || s.startMin == null || s.endMin == null));
+            const unscheduled = scheduled.filter((s: any) => s.day === activeDay && (!s.truckId || s.startMin == null || s.endMin == null)) .filter((s) => jobById[s.jobId])   // ← NEW: only keep items with a real job;
             const legend = [
               { k: 'Load', c: 'bg-amber-300' },
               { k: 'Travel', c: 'bg-sky-300' },
@@ -388,7 +388,8 @@ export default function App() {
                 <div className="space-y-2">
                   {trucks.map((t: any) => {
                     const rows = scheduled
-                      .filter((s: any) => s.day === activeDay && s.truckId === t.id && s.startMin != null && s.endMin != null)
+                      .filter((s: any) => s.day === activeDay && s.truckId === t.id && s.startMin != null && s.endMin != null &&
++   jobById[s.jobId]             // ← NEW: only keep rows with a real job)
                       .sort((a: any, b: any) => (a.startMin ?? 9e9) - (b.startMin ?? 9e9));
                     return (
                       <div key={t.id} className="border rounded p-2">
