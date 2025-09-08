@@ -48,7 +48,13 @@ const save = (k: string, v: any) => {
  * Data models
  * ======================================= */
 type Truck = { id: ID; name: string };
-type Client = { id: ID; name: string; address?: string; phone?: string; notes?: string };
+type Client = {
+  id: ID;
+  name: string;
+  notes?: string;
+  defaultTravelMin?: number;  // NEW
+  defaultOnsiteMin?: number;  // NEW
+};
 
 type JobType = "Delivery" | "Collection";
 type Job = {
@@ -249,7 +255,7 @@ export default function App() {
   };
 
   // Clients
-  const addClient = () => setClients((c) => [...c, { id: uid(), name: "New client" }]);
+  const addClient = () => setClients((c) => [...c, { id: uid(), name: "New client", defaultTravelMin: 30, defaultOnsiteMin: 30 }]);
   const updateClient = (id: ID, patch: Partial<Client>) =>
     setClients((c) => c.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const removeClient = (id: ID) => {
@@ -280,7 +286,7 @@ export default function App() {
     setScheduled((s) => s.filter((r) => r.jobId !== id));
   };
 
-  // Scheduling helpers
+  // Place on schedule
   const placeOnSchedule = (jobId: ID, truckId: ID, day: DayKey, start: number, end: number) => {
     setScheduled((s) => [
       ...s.filter((r) => !(r.jobId === jobId && r.day === day)),
@@ -288,13 +294,74 @@ export default function App() {
     ]);
   };
 
+  // When the client is changed on a job, apply client defaults for travel & on-site
+  const onJobClientChange = (jobId: ID, newClientId: string) => {
+    const client = clientById[newClientId];
+    setJobs((j) =>
+      j.map((x) =>
+        x.id === jobId
+          ? {
+              ...x,
+              clientId: newClientId || null,
+              travelMin: client?.defaultTravelMin ?? x.travelMin,
+              onsiteMin: client?.defaultOnsiteMin ?? x.onsiteMin,
+            }
+          : x
+      )
+    );
+  };
+
+  // Durations
   const jobDuration = (j: Job) => {
     if (!j) return 0;
     if (j.type === "Delivery") return j.loadMin + j.travelMin + j.onsiteMin;
     return j.travelMin + j.onsiteMin + j.returnTravelMin;
   };
 
-  // "Classic" segmented phases (colored)
+  // Save button: place a single job at earliest available slot today
+  const earliestSlotOnTruck = (truckId: ID, dur: number) => {
+    const existing = scheduled
+      .filter((s) => s.day === activeDay && s.truckId === truckId && jobById[s.jobId])
+      .sort((a, b) => a.startMin - b.startMin);
+
+    const snap = (m: number) => Math.ceil(m / gap) * gap;
+    let cur = toMin(settings.startTime);
+    const dayEnd = toMin(settings.endTime);
+
+    const fitsAt = (st: number) => {
+      const en = st + dur;
+      for (const r of existing) if (en > r.startMin && st < r.endMin) return false;
+      return en <= dayEnd;
+    };
+
+    while (cur + dur <= dayEnd) {
+      cur = snap(cur);
+      if (fitsAt(cur)) return cur;
+      cur += gap;
+    }
+    return null;
+  };
+
+  const saveJobToSchedule = (jobId: ID) => {
+    const j = jobById[jobId];
+    if (!j) return;
+    const dur = jobDuration(j);
+
+    const candidateTrucks = j.truckId ? [j.truckId] : trucks.map((t) => t.id);
+    let best: { truckId: ID; start: number } | null = null;
+
+    for (const tid of candidateTrucks) {
+      const st = earliestSlotOnTruck(tid, dur);
+      if (st != null && (best == null || st < best.start)) best = { truckId: tid, start: st };
+    }
+    if (best) {
+      placeOnSchedule(jobId, best.truckId, activeDay, best.start, best.start + dur);
+    } else {
+      alert("No free slot within the day window. Try adjusting times or buffer.");
+    }
+  };
+
+  // Segments (classic colors)
   type Segment = { label: string; color: string; minutes: number };
   const segmentsFor = (j: Job): Segment[] => {
     if (!j) return [];
@@ -313,7 +380,7 @@ export default function App() {
     }
   };
 
-  // Simple greedy autoscheduler (respects bufferBetweenJobs & gap)
+  // Simple greedy autoscheduler
   const autoSchedule = () => {
     const byTruck: Record<ID, Job[]> = {};
     for (const t of trucks) byTruck[t.id] = [];
@@ -453,7 +520,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Clients */}
+        {/* Clients (simplified) */}
         <div className="p-3 rounded-lg border bg-white">
           <div className="flex items-center mb-2">
             <div className="font-medium">Clients</div>
@@ -462,11 +529,36 @@ export default function App() {
           <div className="space-y-2 max-h-64 overflow-auto pr-1">
             {clients.map((c) => (
               <div key={c.id} className="grid grid-cols-5 gap-2 items-center">
-                <input className="border rounded px-2 py-1 col-span-2" value={c.name} onChange={(e) => updateClient(c.id, { name: e.target.value })} placeholder="Client name" />
-                <input className="border rounded px-2 py-1" value={c.address || ""} onChange={(e) => updateClient(c.id, { address: e.target.value })} placeholder="Address" />
-                <input className="border rounded px-2 py-1" value={c.phone || ""} onChange={(e) => updateClient(c.id, { phone: e.target.value })} placeholder="Phone" />
+                <input
+                  className="border rounded px-2 py-1 col-span-2"
+                  value={c.name}
+                  onChange={(e) => updateClient(c.id, { name: e.target.value })}
+                  placeholder="Client name"
+                />
+                {/* NEW: client defaults */}
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1"
+                  value={c.defaultTravelMin ?? 30}
+                  onChange={(e) => updateClient(c.id, { defaultTravelMin: parseInt(e.target.value || "0") })}
+                  title="Default travel time (min)"
+                  placeholder="Travel (min)"
+                />
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1"
+                  value={c.defaultOnsiteMin ?? 30}
+                  onChange={(e) => updateClient(c.id, { defaultOnsiteMin: parseInt(e.target.value || "0") })}
+                  title="Default on-site time (min)"
+                  placeholder="On-site (min)"
+                />
                 <button className="px-2 py-1 rounded border" onClick={() => removeClient(c.id)}>Del</button>
-                <textarea className="mt-1 border rounded px-2 py-1 col-span-5" value={c.notes || ""} onChange={(e) => updateClient(c.id, { notes: e.target.value })} placeholder="Notes" />
+                <textarea
+                  className="mt-1 border rounded px-2 py-1 col-span-5"
+                  value={c.notes || ""}
+                  onChange={(e) => updateClient(c.id, { notes: e.target.value })}
+                  placeholder="Notes"
+                />
               </div>
             ))}
           </div>
@@ -490,7 +582,11 @@ export default function App() {
                 <option>Collection</option>
               </select>
               <input className="border rounded px-2 py-1 md:col-span-2" value={j.title} onChange={(e) => updateJob(j.id, { title: e.target.value })} placeholder="Title" />
-              <select className="border rounded px-2 py-1 md:col-span-2" value={j.clientId || ""} onChange={(e) => updateJob(j.id, { clientId: e.target.value || null })}>
+              <select
+                className="border rounded px-2 py-1 md:col-span-2"
+                value={j.clientId || ""}
+                onChange={(e) => onJobClientChange(j.id, e.target.value)}
+              >
                 <option value="">— Client —</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -509,14 +605,25 @@ export default function App() {
 
               <input className="border rounded px-2 py-1 w-24" value={j.earliest || ""} onChange={(e) => updateJob(j.id, { earliest: e.target.value })} placeholder="Earliest (HH:MM)" title="Soft earliest" />
               <input className="border rounded px-2 py-1 w-24" value={j.latest || ""} onChange={(e) => updateJob(j.id, { latest: e.target.value })} placeholder="Latest (HH:MM)" title="Soft latest" />
+
+              {/* NEW: Save to schedule button */}
+              <button
+                className="px-2 py-1 rounded border"
+                onClick={() => saveJobToSchedule(j.id)}
+                title="Place this job on today's schedule"
+              >
+                Save to schedule
+              </button>
+
               <button className="px-2 py-1 rounded border" onClick={() => removeJob(j.id)}>Del</button>
+
               <textarea className="md:col-span-12 border rounded px-2 py-1" value={j.notes || ""} onChange={(e) => updateJob(j.id, { notes: e.target.value })} placeholder="Notes" />
             </div>
           ))}
         </div>
       </div>
 
-      {/* ⬇️ Quick place moved here (below Jobs, above Schedule) */}
+      {/* Quick place (uses CLIENT NAME) */}
       <div className="mt-4 p-3 rounded-lg border bg-white">
         <div className="font-medium mb-2">Quick place</div>
         <QuickPlace
@@ -537,9 +644,7 @@ export default function App() {
 
             const fitsAt = (st: number) => {
               const en = st + dur;
-              for (const r of existing) {
-                if (en > r.startMin && st < r.endMin) return false;
-              }
+              for (const r of existing) if (en > r.startMin && st < r.endMin) return false;
               return en <= end;
             };
 
@@ -625,7 +730,6 @@ export default function App() {
                       >
                         <div className="px-1 text-[11px] font-medium truncate">{j.type}: {clientName}</div>
                         <div className="h-[18px] w-full relative">
-                          {/* Per-phase colored bars */}
                           {(() => {
                             let acc = 0;
                             return segs.map((sg, i) => {
@@ -652,7 +756,7 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Unscheduled chips (for this day) */}
+                {/* Unscheduled chips */}
                 {unscheduled.length > 0 && (
                   <div className="p-2 border-t bg-slate-50">
                     <div className="text-xs font-medium mb-1">Unscheduled for {activeDay}</div>
@@ -680,7 +784,7 @@ export default function App() {
 }
 
 /** =======================================
- * QuickPlace component (now shows CLIENT NAME)
+ * QuickPlace component (shows CLIENT NAME)
  * ======================================= */
 function QuickPlace({
   jobs, trucks, clients, onPlace,
@@ -692,25 +796,26 @@ function QuickPlace({
 
   const clientById = useMemo(() => Object.fromEntries(clients.map(c => [c.id, c])), [clients]);
 
+  // Sort by display name for convenience
+  const jobsWithNames = useMemo(() => {
+    return jobs.map(j => {
+      const name = (j.clientId && clientById[j.clientId]?.name) || j.title || "No client";
+      return { ...j, __display: `${name} (${j.type})` };
+    }).sort((a, b) => a.__display.localeCompare(b.__display));
+  }, [jobs, clientById]);
+
   return (
     <div className="flex gap-2 items-center">
       <select className="border rounded px-2 py-1" value={jobId} onChange={(e) => setJobId(e.target.value)}>
         <option value="">— Job by client —</option>
-        {jobs.map((j) => {
-          const name = j.clientId ? (clientById[j.clientId]?.name || "No client") : "No client";
-          return (
-            <option key={j.id} value={j.id}>
-              {name} ({j.type})
-            </option>
-          );
-        })}
+        {jobsWithNames.map((j) => (
+          <option key={j.id} value={j.id}>{j.__display}</option>
+        ))}
       </select>
       <select className="border rounded px-2 py-1" value={truckId} onChange={(e) => setTruckId(e.target.value)}>
         <option value="">— Truck —</option>
         {trucks.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
+          <option key={t.id} value={t.id}>{t.name}</option>
         ))}
       </select>
       <button
