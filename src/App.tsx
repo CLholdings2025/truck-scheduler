@@ -434,6 +434,8 @@ export default function App() {
                     <ul className="text-sm space-y-1">
                       {unscheduled.map((s: any) => { const j = jobById[s.jobId]; return (
                         <li key={'u:'+s.jobId} className="flex items-center justify-between"><span>{j.client} · {j.type}</span><span className="text-slate-600">Earliest {j.earliest}</span></li>
+                    if (!j) return null; // skip orphan rows so we don't read j.type on undefined
+
                       ); })}
                     </ul>
                   </div>
