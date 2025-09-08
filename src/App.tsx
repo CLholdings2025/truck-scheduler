@@ -323,6 +323,7 @@ const jobDuration = (j: Job) => {
 };
 
 
+
   // Save button: place a single job at earliest available slot today
   const earliestSlotOnTruck = (truckId: ID, dur: number) => {
     const existing = scheduled
@@ -386,6 +387,7 @@ const segmentsFor = (j: Job): Segment[] => {
     ].filter(seg => seg.minutes > 0);
   }
 };
+
 
 
   // Simple greedy autoscheduler
