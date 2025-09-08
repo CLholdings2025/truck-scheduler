@@ -52,8 +52,8 @@ type Client = {
   id: ID;
   name: string;
   notes?: string;
-  defaultTravelMin?: number;  // NEW
-  defaultOnsiteMin?: number;  // NEW
+  defaultTravelMin?: number;  // labeled below
+  defaultOnsiteMin?: number;  // labeled below
 };
 
 type JobType = "Delivery" | "Collection";
@@ -520,7 +520,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Clients (simplified) */}
+        {/* Clients (with labeled defaults) */}
         <div className="p-3 rounded-lg border bg-white">
           <div className="flex items-center mb-2">
             <div className="font-medium">Clients</div>
@@ -528,37 +528,52 @@ export default function App() {
           </div>
           <div className="space-y-2 max-h-64 overflow-auto pr-1">
             {clients.map((c) => (
-              <div key={c.id} className="grid grid-cols-5 gap-2 items-center">
-                <input
-                  className="border rounded px-2 py-1 col-span-2"
-                  value={c.name}
-                  onChange={(e) => updateClient(c.id, { name: e.target.value })}
-                  placeholder="Client name"
-                />
-                {/* NEW: client defaults */}
-                <input
-                  type="number"
-                  className="border rounded px-2 py-1"
-                  value={c.defaultTravelMin ?? 30}
-                  onChange={(e) => updateClient(c.id, { defaultTravelMin: parseInt(e.target.value || "0") })}
-                  title="Default travel time (min)"
-                  placeholder="Travel (min)"
-                />
-                <input
-                  type="number"
-                  className="border rounded px-2 py-1"
-                  value={c.defaultOnsiteMin ?? 30}
-                  onChange={(e) => updateClient(c.id, { defaultOnsiteMin: parseInt(e.target.value || "0") })}
-                  title="Default on-site time (min)"
-                  placeholder="On-site (min)"
-                />
-                <button className="px-2 py-1 rounded border" onClick={() => removeClient(c.id)}>Del</button>
-                <textarea
-                  className="mt-1 border rounded px-2 py-1 col-span-5"
-                  value={c.notes || ""}
-                  onChange={(e) => updateClient(c.id, { notes: e.target.value })}
-                  placeholder="Notes"
-                />
+              <div key={c.id} className="grid grid-cols-5 gap-2 items-start">
+                <div className="col-span-2">
+                  <label className="block text-xs text-slate-500 mb-1">Client name</label>
+                  <input
+                    className="border rounded px-2 py-1 w-full"
+                    value={c.name}
+                    onChange={(e) => updateClient(c.id, { name: e.target.value })}
+                    placeholder="Client name"
+                  />
+                </div>
+
+                <div className="">
+                  <label className="block text-xs text-slate-500 mb-1">Default travel (min)</label>
+                  <input
+                    type="number"
+                    className="border rounded px-2 py-1 w-full"
+                    value={c.defaultTravelMin ?? 30}
+                    onChange={(e) => updateClient(c.id, { defaultTravelMin: parseInt(e.target.value || "0") })}
+                    placeholder="Travel (min)"
+                  />
+                </div>
+
+                <div className="">
+                  <label className="block text-xs text-slate-500 mb-1">Default on-site (min)</label>
+                  <input
+                    type="number"
+                    className="border rounded px-2 py-1 w-full"
+                    value={c.defaultOnsiteMin ?? 30}
+                    onChange={(e) => updateClient(c.id, { defaultOnsiteMin: parseInt(e.target.value || "0") })}
+                    placeholder="On-site (min)"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button className="px-2 py-1 rounded border w-full" onClick={() => removeClient(c.id)}>Del</button>
+                </div>
+
+                <div className="col-span-5">
+                  <label className="block text-xs text-slate-500 mb-1">Notes</label>
+                  <textarea
+                    className="border rounded px-2 py-1 w-full"
+                    value={c.notes || ""}
+                    onChange={(e) => updateClient(c.id, { notes: e.target.value })}
+                    placeholder="Notes"
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -574,50 +589,129 @@ export default function App() {
             <button className="px-2 py-1 rounded border" onClick={() => addJob("Delivery")}>+ Delivery</button>
           </div>
         </div>
+
         <div className="space-y-3 max-h-80 overflow-auto pr-1">
           {jobs.map((j) => (
-            <div key={j.id} className="grid md:grid-cols-12 gap-2 items-center">
-              <select className="border rounded px-2 py-1 md:col-span-2" value={j.type} onChange={(e) => updateJob(j.id, { type: e.target.value as JobType })}>
-                <option>Delivery</option>
-                <option>Collection</option>
-              </select>
-              <input className="border rounded px-2 py-1 md:col-span-2" value={j.title} onChange={(e) => updateJob(j.id, { title: e.target.value })} placeholder="Title" />
-              <select
-                className="border rounded px-2 py-1 md:col-span-2"
-                value={j.clientId || ""}
-                onChange={(e) => onJobClientChange(j.id, e.target.value)}
-              >
-                <option value="">— Client —</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <select className="border rounded px-2 py-1 md:col-span-2" value={j.truckId || ""} onChange={(e) => updateJob(j.id, { truckId: e.target.value || null })}>
-                <option value="">— Any truck —</option>
-                {trucks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+            <div key={j.id} className="grid md:grid-cols-12 gap-2 items-start">
+              <div className="md:col-span-2">
+                <label className="block text-xs text-slate-500 mb-1">Type</label>
+                <select className="border rounded px-2 py-1 w-full" value={j.type} onChange={(e) => updateJob(j.id, { type: e.target.value as JobType })}>
+                  <option>Delivery</option>
+                  <option>Collection</option>
+                </select>
+              </div>
 
-              {/* Times */}
-              <input type="number" className="border rounded px-2 py-1 w-24" value={j.loadMin} onChange={(e) => updateJob(j.id, { loadMin: parseInt(e.target.value || "0") })} title={j.type === "Delivery" ? "Depot loading (min)" : "Off-site loading (min)"} placeholder={j.type === "Delivery" ? "Load (min)" : "Off-site load (min)"} />
-              <input type="number" className="border rounded px-2 py-1 w-24" value={j.travelMin} onChange={(e) => updateJob(j.id, { travelMin: parseInt(e.target.value || "0") })} title="Travel to site (min)" placeholder="Travel (min)" />
-              <input type="number" className="border rounded px-2 py-1 w-24" value={j.onsiteMin} onChange={(e) => updateJob(j.id, { onsiteMin: parseInt(e.target.value || "0") })} title={j.type === "Delivery" ? "On-site offload (min)" : "On-site loading (min)"} placeholder="On-site (min)" />
+              <div className="md:col-span-2">
+                <label className="block text-xs text-slate-500 mb-1">Title</label>
+                <input className="border rounded px-2 py-1 w-full" value={j.title} onChange={(e) => updateJob(j.id, { title: e.target.value })} placeholder="Title" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs text-slate-500 mb-1">Client</label>
+                <select
+                  className="border rounded px-2 py-1 w-full"
+                  value={j.clientId || ""}
+                  onChange={(e) => onJobClientChange(j.id, e.target.value)}
+                >
+                  <option value="">— Client —</option>
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs text-slate-500 mb-1">Truck</label>
+                <select className="border rounded px-2 py-1 w-full" value={j.truckId || ""} onChange={(e) => updateJob(j.id, { truckId: e.target.value || null })}>
+                  <option value="">— Any truck —</option>
+                  {trucks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">
+                  {j.type === "Delivery" ? "Load (min)" : "Off-site load (min)"}
+                </label>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 w-24"
+                  value={j.loadMin}
+                  onChange={(e) => updateJob(j.id, { loadMin: parseInt(e.target.value || "0") })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Travel (min)</label>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 w-24"
+                  value={j.travelMin}
+                  onChange={(e) => updateJob(j.id, { travelMin: parseInt(e.target.value || "0") })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">
+                  {j.type === "Delivery" ? "Offload (min)" : "On-site (min)"}
+                </label>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 w-24"
+                  value={j.onsiteMin}
+                  onChange={(e) => updateJob(j.id, { onsiteMin: parseInt(e.target.value || "0") })}
+                />
+              </div>
+
               {j.type === "Collection" && (
-                <input type="number" className="border rounded px-2 py-1 w-28" value={j.returnTravelMin} onChange={(e) => updateJob(j.id, { returnTravelMin: parseInt(e.target.value || "0") })} title="Return travel (min)" placeholder="Return (min)" />
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Return (min)</label>
+                  <input
+                    type="number"
+                    className="border rounded px-2 py-1 w-28"
+                    value={j.returnTravelMin}
+                    onChange={(e) => updateJob(j.id, { returnTravelMin: parseInt(e.target.value || "0") })}
+                  />
+                </div>
               )}
 
-              <input className="border rounded px-2 py-1 w-24" value={j.earliest || ""} onChange={(e) => updateJob(j.id, { earliest: e.target.value })} placeholder="Earliest (HH:MM)" title="Soft earliest" />
-              <input className="border rounded px-2 py-1 w-24" value={j.latest || ""} onChange={(e) => updateJob(j.id, { latest: e.target.value })} placeholder="Latest (HH:MM)" title="Soft latest" />
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Earliest (HH:MM)</label>
+                <input
+                  className="border rounded px-2 py-1 w-24"
+                  value={j.earliest || ""}
+                  onChange={(e) => updateJob(j.id, { earliest: e.target.value })}
+                  placeholder="07:00"
+                />
+              </div>
 
-              {/* NEW: Save to schedule button */}
-              <button
-                className="px-2 py-1 rounded border"
-                onClick={() => saveJobToSchedule(j.id)}
-                title="Place this job on today's schedule"
-              >
-                Save to schedule
-              </button>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Latest (HH:MM)</label>
+                <input
+                  className="border rounded px-2 py-1 w-24"
+                  value={j.latest || ""}
+                  onChange={(e) => updateJob(j.id, { latest: e.target.value })}
+                  placeholder="18:00"
+                />
+              </div>
 
-              <button className="px-2 py-1 rounded border" onClick={() => removeJob(j.id)}>Del</button>
+              <div className="flex items-end gap-2">
+                <button
+                  className="px-2 py-1 rounded border"
+                  onClick={() => saveJobToSchedule(j.id)}
+                  title="Place this job on today's schedule"
+                >
+                  Save to schedule
+                </button>
+                <button className="px-2 py-1 rounded border" onClick={() => removeJob(j.id)}>Del</button>
+              </div>
 
-              <textarea className="md:col-span-12 border rounded px-2 py-1" value={j.notes || ""} onChange={(e) => updateJob(j.id, { notes: e.target.value })} placeholder="Notes" />
+              <div className="md:col-span-12">
+                <label className="block text-xs text-slate-500 mb-1">Notes</label>
+                <textarea
+                  className="border rounded px-2 py-1 w-full"
+                  value={j.notes || ""}
+                  onChange={(e) => updateJob(j.id, { notes: e.target.value })}
+                  placeholder="Notes"
+                />
+              </div>
             </div>
           ))}
         </div>
